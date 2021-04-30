@@ -91,12 +91,9 @@ struct ConnectionStateMachine {
         
         // --- streaming actions
         // actions if query has requested next row but we are waiting for backend
-        case forwardRow([PSQLData], to: EventLoopPromise<StateMachineStreamNextResult>)
-        case forwardCommandComplete(CircularBuffer<[PSQLData]>, commandTag: String, to: EventLoopPromise<StateMachineStreamNextResult>)
-        case forwardStreamError(PSQLError, to: EventLoopPromise<StateMachineStreamNextResult>, cleanupContext: CleanUpContext?)
-        // actions if query has not asked for next row but are pushing the final bytes to it
-        case forwardStreamErrorToCurrentQuery(PSQLError, read: Bool, cleanupContext: CleanUpContext?)
-        case forwardStreamCompletedToCurrentQuery(CircularBuffer<[PSQLData]>, commandTag: String, read: Bool)
+        case forwardRows(CircularBuffer<PSQLBackendMessage.DataRow>)
+        case forwardStreamComplete(CircularBuffer<PSQLBackendMessage.DataRow>, commandTag: String, read: Bool)
+        case forwardStreamError(PSQLError, read: Bool, cleanupContext: CleanUpContext?)
         
         // Prepare statement actions
         case sendParseDescribeSync(name: String, query: String)
@@ -695,13 +692,13 @@ struct ConnectionStateMachine {
         }
     }
     
-    mutating func dataRowReceived(_ dataRow: PSQLBackendMessage.DataRow) -> ConnectionAction {
+    mutating func dataRowsReceived(_ dataRows: CircularBuffer<PSQLBackendMessage.DataRow>) -> ConnectionAction {
         guard case .extendedQuery(var queryState, let connectionContext) = self.state, !queryState.isComplete else {
-            return self.closeConnectionAndCleanup(.unexpectedBackendMessage(.dataRow(dataRow)))
+            return self.closeConnectionAndCleanup(.unexpectedBackendMessage(.dataRow(dataRows.first!)))
         }
         
         return self.avoidingStateMachineCoW { machine -> ConnectionAction in
-            let action = queryState.dataRowReceived(dataRow)
+            let action = queryState.dataRowsReceived(dataRows)
             machine.state = .extendedQuery(queryState, connectionContext)
             return machine.modify(with: action)
         }
@@ -713,13 +710,13 @@ struct ConnectionStateMachine {
         preconditionFailure("Unimplemented")
     }
     
-    mutating func consumeNextQueryRow(promise: EventLoopPromise<StateMachineStreamNextResult>) -> ConnectionAction {
+    mutating func requestQueryRows() -> ConnectionAction {
         guard case .extendedQuery(var queryState, let connectionContext) = self.state, !queryState.isComplete else {
             preconditionFailure("Tried to consume next row, without active query")
         }
         
         return self.avoidingStateMachineCoW { machine -> ConnectionAction in
-            let action = queryState.consumeNextRow(promise: promise)
+            let action = queryState.requestQueryRows()
             machine.state = .extendedQuery(queryState, connectionContext)
             return machine.modify(with: action)
         }
@@ -782,18 +779,15 @@ struct ConnectionStateMachine {
                  .sendBindExecuteSync,
                  .succeedQuery,
                  .succeedQueryNoRowsComming,
-                 .forwardRow,
-                 .forwardCommandComplete,
-                 .forwardStreamCompletedToCurrentQuery,
+                 .forwardRows,
+                 .forwardStreamComplete,
                  .wait,
                  .read:
                 preconditionFailure("Expecting only failure actions if an error happened")
             case .failQuery(let queryContext, with: let error):
                 return .failQuery(queryContext, with: error, cleanupContext: cleanupContext)
-            case .forwardStreamError(let error, to: let promise):
-                return .forwardStreamError(error, to: promise, cleanupContext: cleanupContext)
-            case .forwardStreamErrorToCurrentQuery(let error, read: let read):
-                return .forwardStreamErrorToCurrentQuery(error, read: read, cleanupContext: cleanupContext)
+            case .forwardStreamError(let error, let read):
+                return .forwardStreamError(error, read: read, cleanupContext: cleanupContext)
             }
         case .prepareStatement(var prepareStateMachine, _):
             let cleanupContext = self.setErrorAndCreateCleanupContext(error)
@@ -1024,18 +1018,13 @@ extension ConnectionStateMachine {
             return .succeedQuery(requestContext, columns: columns)
         case .succeedQueryNoRowsComming(let requestContext, let commandTag):
             return .succeedQueryNoRowsComming(requestContext, commandTag: commandTag)
-        case .forwardRow(let data, to: let promise):
-            return .forwardRow(data, to: promise)
-        case .forwardCommandComplete(let buffer, let commandTag, to: let promise):
-            return .forwardCommandComplete(buffer, commandTag: commandTag, to: promise)
-        case .forwardStreamError(let error, to: let promise):
+        case .forwardRows(let buffer):
+            return .forwardRows(buffer)
+        case .forwardStreamComplete(let buffer, let commandTag, let read):
+            return .forwardStreamComplete(buffer, commandTag: commandTag, read: read)
+        case .forwardStreamError(let error, let read):
             let cleanupContext = self.setErrorAndCreateCleanupContextIfNeeded(error)
-            return .forwardStreamError(error, to: promise, cleanupContext: cleanupContext)
-        case .forwardStreamErrorToCurrentQuery(let error, let read):
-            let cleanupContext = self.setErrorAndCreateCleanupContextIfNeeded(error)
-            return .forwardStreamErrorToCurrentQuery(error, read: read, cleanupContext: cleanupContext)
-        case .forwardStreamCompletedToCurrentQuery(let buffer, let commandTag, let read):
-            return .forwardStreamCompletedToCurrentQuery(buffer, commandTag: commandTag, read: read)
+            return .forwardStreamError(error, read: read, cleanupContext: cleanupContext)
         case .read:
             return .read
         case .wait:
@@ -1101,14 +1090,6 @@ extension ConnectionStateMachine {
             return .wait
         }
     }
-}
-
-enum StateMachineStreamNextResult {
-    /// the next row
-    case row([PSQLData])
-    
-    /// the query has completed, all remaining rows and the command completion tag
-    case complete(CircularBuffer<[PSQLData]>, commandTag: String)
 }
 
 struct SendPrepareStatement {

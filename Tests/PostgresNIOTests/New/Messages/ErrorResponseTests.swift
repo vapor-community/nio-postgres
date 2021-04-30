@@ -24,8 +24,8 @@ class ErrorResponseTests: XCTestCase {
             buffer.writeInteger(0, as: UInt8.self) // signal done
         }
         
-        let expectedInOuts = [
-            (buffer, [PSQLBackendMessage.error(.init(fields: fields))]),
+        let expectedInOuts: [(ByteBuffer, [PSQLOptimizedBackendMessage])] = [
+            (buffer, [.pure(.error(.init(fields: fields)))]),
         ]
         
         XCTAssertNoThrow(try ByteToMessageDecoderVerifier.verifyDecoder(

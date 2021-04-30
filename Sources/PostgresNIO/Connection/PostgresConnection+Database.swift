@@ -32,6 +32,33 @@ extension PostgresConnection: PostgresDatabase {
                     onMetadata(PostgresQueryMetadata(string: rows.commandTag)!)
                 }
             }
+        case .queryAll(let query, let binds, let onResult):
+            resultFuture = self.underlying.query(query, binds, logger: logger).flatMap { rows in
+                let fields = rows.rowDescription.map { column in
+                    PostgresMessage.RowDescription.Field(
+                        name: column.name,
+                        tableOID: UInt32(column.tableOID),
+                        columnAttributeNumber: column.columnAttributeNumber,
+                        dataType: PostgresDataType(UInt32(column.dataType.rawValue)),
+                        dataTypeSize: column.dataTypeSize,
+                        dataTypeModifier: column.dataTypeModifier,
+                        formatCode: .init(psqlFormatCode: column.formatCode)
+                    )
+                }
+                
+                let lookupTable = PostgresRow.LookupTable(rowDescription: .init(fields: fields), resultFormat: [.binary])
+                return rows.all().map { allrows in
+                    let r = allrows.map { psqlRow -> PostgresRow in
+                        let columns = psqlRow.data.columns.map {
+                            PostgresMessage.DataRow.Column(value: $0)
+                        }
+                        return PostgresRow(dataRow: .init(columns: columns), lookupTable: lookupTable)
+                    }
+                    
+                    onResult(.init(metadata: PostgresQueryMetadata(string: rows.commandTag)!, rows: r))
+                }
+            }
+            
         case .prepareQuery(let request):
             resultFuture = self.underlying.prepareStatement(request.query, with: request.name, logger: self.logger).map {
                 request.prepared = PreparedQuery(underlying: $0, database: self)
@@ -61,6 +88,9 @@ internal enum PostgresCommands: PostgresRequest {
                binds: [PostgresData],
                onMetadata: (PostgresQueryMetadata) -> () = { _ in },
                onRow: (PostgresRow) throws -> ())
+    case queryAll(query: String,
+                  binds: [PostgresData],
+                  onResult: (PostgresQueryResult) -> ())
     case prepareQuery(request: PrepareQueryRequest)
     case executePreparedStatement(query: PreparedQuery, binds: [PostgresData], onRow: (PostgresRow) throws -> ())
     
@@ -77,12 +107,12 @@ internal enum PostgresCommands: PostgresRequest {
     }
 }
 
-extension PSQLRows {
+extension PSQLRowBatchStream {
     
     func iterateRowsWithoutBackpressureOption(lookupTable: PostgresRow.LookupTable, onRow: @escaping (PostgresRow) throws -> ()) -> EventLoopFuture<Void> {
         self.onRow { psqlRow in
-            let columns = psqlRow.data.map { psqlData in
-                PostgresMessage.DataRow.Column(value: psqlData.bytes)
+            let columns = psqlRow.data.columns.map {
+                PostgresMessage.DataRow.Column(value: $0)
             }
             
             let row = PostgresRow(dataRow: .init(columns: columns), lookupTable: lookupTable)

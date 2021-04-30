@@ -43,6 +43,11 @@ enum PSQLBackendMessage {
     case sslSupported
     case sslUnsupported
 }
+
+enum PSQLOptimizedBackendMessage {
+    case pure(PSQLBackendMessage)
+    case dataRows(CircularBuffer<PSQLBackendMessage.DataRow>)
+}
     
 extension PSQLBackendMessage {
     enum ID: RawRepresentable, Equatable {
@@ -239,9 +244,16 @@ extension PSQLBackendMessage {
 extension PSQLBackendMessage {
     
     struct Decoder: ByteToMessageDecoder {
-        typealias InboundOut = PSQLBackendMessage
+        typealias InboundOut = PSQLOptimizedBackendMessage
         
-        private(set) var hasAlreadyReceivedBytes: Bool = false
+        private(set) var hasAlreadyReceivedBytes: Bool
+        private(set) var dataRowBuffer = CircularBuffer<DataRow>()
+        
+        init(hasAlreadyReceivedBytes: Bool = false) {
+            // just to not run into the first couple of resizes
+            self.dataRowBuffer.reserveCapacity(32)
+            self.hasAlreadyReceivedBytes = hasAlreadyReceivedBytes
+        }
         
         mutating func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
             // make sure we have at least one byte to read
@@ -261,13 +273,13 @@ extension PSQLBackendMessage {
                 case UInt8(ascii: "S"):
                     // mark byte as read
                     buffer.moveReaderIndex(forwardBy: 1)
-                    context.fireChannelRead(NIOAny(PSQLBackendMessage.sslSupported))
+                    context.fireChannelRead(wrapInboundOut(.pure(.sslSupported)))
                     self.hasAlreadyReceivedBytes = true
                     return .continue
                 case UInt8(ascii: "N"):
                     // mark byte as read
                     buffer.moveReaderIndex(forwardBy: 1)
-                    context.fireChannelRead(NIOAny(PSQLBackendMessage.sslUnsupported))
+                    context.fireChannelRead(wrapInboundOut(.pure(.sslUnsupported)))
                     self.hasAlreadyReceivedBytes = true
                     return .continue
                 default:
@@ -275,45 +287,72 @@ extension PSQLBackendMessage {
                 }
             }
             
-            // all other packages have an Int32 after the identifier that determines their length.
-            // do we have enough bytes for that?
-            guard buffer.readableBytes >= 5 else {
-                return .needMoreData
-            }
-            
-            let idByte = buffer.getInteger(at: buffer.readerIndex, as: UInt8.self)!
-            let length = buffer.getInteger(at: buffer.readerIndex + 1, as: Int32.self)!
-            
-            guard length + 1 <= buffer.readableBytes else {
-                return .needMoreData
-            }
-            
-            // At this point we are sure, that we have enough bytes to decode the next message.
-            // 1. Create a byteBuffer that represents exactly the next message. This can be force
-            //    unwrapped, since it was verified that enough bytes are available.
-            let completeMessageBuffer = buffer.readSlice(length: 1 + Int(length))!
-            
-            // 2. make sure we have a known message identifier
-            guard let messageID = PSQLBackendMessage.ID(rawValue: idByte) else {
-                throw DecodingError.unknownMessageIDReceived(messageID: idByte, messageBytes: completeMessageBuffer)
-            }
-            
-            // 3. decode the message
-            do {
-                // get a mutable byteBuffer copy
-                var slice = completeMessageBuffer
-                // move reader index forward by five bytes
-                slice.moveReaderIndex(forwardBy: 5)
+            repeat {
+                // all other packages have an Int32 after the identifier that determines their length.
+                // do we have enough bytes for that?
+                guard buffer.readableBytes >= 5 else {
+                    return .needMoreData
+                }
                 
-                let message = try PSQLBackendMessage.decode(from: &slice, for: messageID)
-                context.fireChannelRead(NIOAny(message))
-            } catch let error as PartialDecodingError {
-                throw DecodingError.withPartialError(error, messageID: messageID, messageBytes: completeMessageBuffer)
-            } catch {
-                preconditionFailure("Expected to only see `PartialDecodingError`s here.")
+                let idByte = buffer.getInteger(at: buffer.readerIndex, as: UInt8.self)!
+                let length = buffer.getInteger(at: buffer.readerIndex + 1, as: Int32.self)!
+                
+                guard length + 1 <= buffer.readableBytes else {
+                    return .needMoreData
+                }
+                
+                // At this point we are sure, that we have enough bytes to decode the next message.
+                // 1. Create a byteBuffer that represents exactly the next message. This can be force
+                //    unwrapped, since it was verified that enough bytes are available.
+                let completeMessageBuffer = buffer.readSlice(length: 1 + Int(length))!
+                
+                // 2. make sure we have a known message identifier
+                guard let messageID = PSQLBackendMessage.ID(rawValue: idByte) else {
+                    throw DecodingError.unknownMessageIDReceived(messageID: idByte, messageBytes: completeMessageBuffer)
+                }
+                
+                // 3. decode the message
+                do {
+                    // get a mutable byteBuffer copy
+                    var slice = completeMessageBuffer
+                    // move reader index forward by five bytes
+                    slice.moveReaderIndex(forwardBy: 5)
+                    
+                    let message = try PSQLBackendMessage.decode(from: &slice, for: messageID)
+                    
+                    if case .dataRow(let row) = message {
+                        self.dataRowBuffer.append(row)
+                        continue
+                    }
+                    
+                    if self.dataRowBuffer.count > 0 {
+                        let localCopy = self.dataRowBuffer
+                        // a malloc is cheaper than a malloc + copy
+                        self.dataRowBuffer = .init(initialCapacity: self.dataRowBuffer.capacity)
+                        context.fireChannelRead(wrapInboundOut(.dataRows(localCopy)))
+                    }
+                    context.fireChannelRead(wrapInboundOut(.pure(message)))
+                    
+                } catch let error as PartialDecodingError {
+                    throw DecodingError.withPartialError(error, messageID: messageID, messageBytes: completeMessageBuffer)
+                } catch {
+                    preconditionFailure("Expected to only see `PartialDecodingError`s here.")
+                }
+
+            } while buffer.readableBytes >= 5
+            
+            if self.dataRowBuffer.count > 0 {
+                let localCopy = self.dataRowBuffer
+                // a malloc is cheaper than a malloc + copy
+                self.dataRowBuffer = .init(initialCapacity: self.dataRowBuffer.capacity)
+                context.fireChannelRead(wrapInboundOut(.dataRows(localCopy)))
             }
             
-            return .continue
+            if buffer.readableBytes == 0 {
+                return .continue
+            }
+            
+            return .needMoreData
         }
     }
 }

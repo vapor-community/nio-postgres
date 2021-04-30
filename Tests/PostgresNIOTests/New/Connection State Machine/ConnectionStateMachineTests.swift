@@ -113,7 +113,7 @@ class ConnectionStateMachineTests: XCTestCase {
         let salt: (UInt8, UInt8, UInt8, UInt8) = (0, 1, 2, 3)
 
         let jsonDecoder = JSONDecoder()
-        let queryPromise = eventLoopGroup.next().makePromise(of: PSQLRows.self)
+        let queryPromise = eventLoopGroup.next().makePromise(of: PSQLRowBatchStream.self)
 
         var state = ConnectionStateMachine()
         let extendedQueryContext = ExtendedQueryContext(

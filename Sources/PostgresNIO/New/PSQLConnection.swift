@@ -120,17 +120,17 @@ final class PSQLConnection {
     
     // MARK: Query
             
-    func query(_ query: String, logger: Logger) -> EventLoopFuture<PSQLRows> {
+    func query(_ query: String, logger: Logger) -> EventLoopFuture<PSQLRowBatchStream> {
         self.query(query, [], logger: logger)
     }
     
-    func query(_ query: String, _ bind: [PSQLEncodable], logger: Logger) -> EventLoopFuture<PSQLRows> {
+    func query(_ query: String, _ bind: [PSQLEncodable], logger: Logger) -> EventLoopFuture<PSQLRowBatchStream> {
         var logger = logger
         logger[postgresMetadataKey: .connectionID] = "\(self.connectionID)"
         guard bind.count <= Int(Int16.max) else {
             return self.channel.eventLoop.makeFailedFuture(PSQLError.tooManyParameters)
         }
-        let promise = self.channel.eventLoop.makePromise(of: PSQLRows.self)
+        let promise = self.channel.eventLoop.makePromise(of: PSQLRowBatchStream.self)
         let context = ExtendedQueryContext(
             query: query,
             bind: bind,
@@ -160,12 +160,12 @@ final class PSQLConnection {
     }
     
     func execute(_ preparedStatement: PSQLPreparedStatement,
-                 _ bind: [PSQLEncodable], logger: Logger) -> EventLoopFuture<PSQLRows>
+                 _ bind: [PSQLEncodable], logger: Logger) -> EventLoopFuture<PSQLRowBatchStream>
     {
         guard bind.count <= Int(Int16.max) else {
             return self.channel.eventLoop.makeFailedFuture(PSQLError.tooManyParameters)
         }
-        let promise = self.channel.eventLoop.makePromise(of: PSQLRows.self)
+        let promise = self.channel.eventLoop.makePromise(of: PSQLRowBatchStream.self)
         let context = ExtendedQueryContext(
             preparedStatement: preparedStatement,
             bind: bind,

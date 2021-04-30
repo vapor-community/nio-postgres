@@ -47,3 +47,18 @@ extension PSQLBackendMessage: Equatable {
         }
     }
 }
+
+extension PSQLOptimizedBackendMessage: Equatable {
+    
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.pure(let lhs), .pure(let rhs)):
+            return lhs == rhs
+        case (.dataRows(let lhs), .dataRows(let rhs)):
+            return lhs == rhs
+        default:
+            return false
+        }
+    }
+    
+}

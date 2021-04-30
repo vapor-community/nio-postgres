@@ -6,14 +6,11 @@ extension PostgresDatabase {
         _ string: String,
         _ binds: [PostgresData] = []
     ) -> EventLoopFuture<PostgresQueryResult> {
-        var rows: [PostgresRow] = []
-        var metadata: PostgresQueryMetadata?
-        return self.query(string, binds, onMetadata: {
-            metadata = $0
-        }) {
-            rows.append($0)
-        }.map {
-            .init(metadata: metadata!, rows: rows)
+        var result: PostgresQueryResult?
+        let request = PostgresCommands.queryAll(query: string, binds: binds, onResult: { result = $0 })
+        
+        return self.send(request, logger: logger).map {
+            result!
         }
     }
 
