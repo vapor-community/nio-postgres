@@ -10,8 +10,8 @@ class BackendKeyDataTests: XCTestCase {
             buffer.writeInteger(Int32(4567))
         }
         
-        let expectedInOuts = [
-            (buffer, [PSQLBackendMessage.backendKeyData(.init(processID: 1234, secretKey: 4567))]),
+        let expectedInOuts: [(ByteBuffer, [PSQLOptimizedBackendMessage])] = [
+            (buffer, [.pure(.backendKeyData(.init(processID: 1234, secretKey: 4567)))]),
         ]
         
         XCTAssertNoThrow(try ByteToMessageDecoderVerifier.verifyDecoder(
@@ -26,8 +26,8 @@ class BackendKeyDataTests: XCTestCase {
         buffer.writeInteger(Int32(1234))
         buffer.writeInteger(Int32(4567))
         
-        let expected = [
-            (buffer, [PSQLBackendMessage.backendKeyData(.init(processID: 1234, secretKey: 4567))]),
+        let expected: [(ByteBuffer, [PSQLOptimizedBackendMessage])] = [
+            (buffer, []),
         ]
         
         XCTAssertThrowsError(try ByteToMessageDecoderVerifier.verifyDecoder(

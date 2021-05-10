@@ -8,7 +8,7 @@ protocol PSQLChannelHandlerNotificationDelegate: AnyObject {
 }
 
 final class PSQLChannelHandler: ChannelDuplexHandler {
-    typealias InboundIn = PSQLBackendMessage
+    typealias InboundIn = PSQLOptimizedBackendMessage
     typealias OutboundIn = PSQLTask
     typealias OutboundOut = PSQLFrontendMessage
 
@@ -18,7 +18,12 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
             self.logger.trace("Connection state changed", metadata: [.connectionState: "\(self.state)"])
         }
     }
-    private var currentQuery: PSQLRows?
+    
+    /// A `ChannelHandlerContext` to be used for non channel related events. (for example: More rows needed).
+    ///
+    /// The context is captured in `handlerAdded` and released` in `handlerRemoved`
+    private var handlerContext: ChannelHandlerContext!
+    private var rowStream: PSQLRowBatchStream?
     private let authentificationConfiguration: PSQLConnection.Configuration.Authentication?
     private let enableSSLCallback: ((Channel) -> EventLoopFuture<Void>)?
     
@@ -52,9 +57,14 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
     // MARK: Handler lifecycle
     
     func handlerAdded(context: ChannelHandlerContext) {
+        self.handlerContext = context
         if context.channel.isActive {
             self.connected(context: context)
         }
+    }
+    
+    func handlerRemoved(context: ChannelHandlerContext) {
+        self.handlerContext = nil
     }
     
     // MARK: Channel handler incoming
@@ -88,43 +98,45 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
         let action: ConnectionStateMachine.ConnectionAction
         
         switch incomingMessage {
-        case .authentication(let authentication):
+        case .pure(.authentication(let authentication)):
             action = self.state.authenticationMessageReceived(authentication)
-        case .backendKeyData(let keyData):
+        case .pure(.backendKeyData(let keyData)):
             action = self.state.backendKeyDataReceived(keyData)
-        case .bindComplete:
+        case .pure(.bindComplete):
             action = self.state.bindCompleteReceived()
-        case .closeComplete:
+        case .pure(.closeComplete):
             action = self.state.closeCompletedReceived()
-        case .commandComplete(let commandTag):
+        case .pure(.commandComplete(let commandTag)):
             action = self.state.commandCompletedReceived(commandTag)
-        case .dataRow(let dataRow):
-            action = self.state.dataRowReceived(dataRow)
-        case .emptyQueryResponse:
+        case .pure(.dataRow):
+            preconditionFailure("Expected dataRow are only transferred in an optimized format")
+        case .dataRows(let dataRows):
+            action = self.state.dataRowsReceived(dataRows)
+        case .pure(.emptyQueryResponse):
             action = self.state.emptyQueryResponseReceived()
-        case .error(let errorResponse):
+        case .pure(.error(let errorResponse)):
             action = self.state.errorReceived(errorResponse)
-        case .noData:
+        case .pure(.noData):
             action = self.state.noDataReceived()
-        case .notice(let noticeResponse):
+        case .pure(.notice(let noticeResponse)):
             action = self.state.noticeReceived(noticeResponse)
-        case .notification(let notification):
+        case .pure(.notification(let notification)):
             action = self.state.notificationReceived(notification)
-        case .parameterDescription(let parameterDescription):
+        case .pure(.parameterDescription(let parameterDescription)):
             action = self.state.parameterDescriptionReceived(parameterDescription)
-        case .parameterStatus(let parameterStatus):
+        case .pure(.parameterStatus(let parameterStatus)):
             action = self.state.parameterStatusReceived(parameterStatus)
-        case .parseComplete:
+        case .pure(.parseComplete):
             action = self.state.parseCompleteReceived()
-        case .portalSuspended:
+        case .pure(.portalSuspended):
             action = self.state.portalSuspendedReceived()
-        case .readyForQuery(let transactionState):
+        case .pure(.readyForQuery(let transactionState)):
             action = self.state.readyForQueryReceived(transactionState)
-        case .rowDescription(let rowDescription):
+        case .pure(.rowDescription(let rowDescription)):
             action = self.state.rowDescriptionReceived(rowDescription)
-        case .sslSupported:
+        case .pure(.sslSupported):
             action = self.state.sslSupportedReceived()
-        case .sslUnsupported:
+        case .pure(.sslUnsupported):
             action = self.state.sslUnsupportedReceived()
         }
         
@@ -224,36 +236,24 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
             if let cleanupContext = cleanupContext {
                 self.closeConnectionAndCleanup(cleanupContext, context: context)
             }
-        case .forwardRow(let row, to: let promise):
-            promise.succeed(.row(row))
-        case .forwardCommandComplete(let buffer, let commandTag, to: let promise):
-            promise.succeed(.complete(buffer, commandTag: commandTag))
-            self.currentQuery = nil
-        case .forwardStreamError(let error, to: let promise, let cleanupContext):
-            promise.fail(error)
-            self.currentQuery = nil
-            if let cleanupContext = cleanupContext {
-                self.closeConnectionAndCleanup(cleanupContext, context: context)
+        case .forwardRows(let rows):
+            self.rowStream!.receive(rows)
+            
+        case .forwardStreamComplete(let buffer, let commandTag, let read):
+            if buffer.count > 0 {
+                self.rowStream!.receive(buffer)
             }
-        case .forwardStreamErrorToCurrentQuery(let error, let read, let cleanupContext):
-            guard let query = self.currentQuery else {
-                preconditionFailure("Expected to have an open query at this point")
-            }
-            query.finalForward(.failure(error))
-            self.currentQuery = nil
+            self.rowStream!.receive(completion: .success(commandTag))
+            self.rowStream = nil
             if read {
                 context.read()
             }
+        case .forwardStreamError(let error, let read, let cleanupContext):
+            self.rowStream!.receive(completion: .failure(error))
+            self.rowStream = nil
             if let cleanupContext = cleanupContext {
                 self.closeConnectionAndCleanup(cleanupContext, context: context)
-            }
-        case .forwardStreamCompletedToCurrentQuery(let buffer, commandTag: let commandTag, let read):
-            guard let query = self.currentQuery else {
-                preconditionFailure("Expected to have an open query at this point")
-            }
-            query.finalForward(.success((buffer, commandTag)))
-            self.currentQuery = nil
-            if read {
+            } else if read {
                 context.read()
             }
         case .provideAuthenticationContext:
@@ -365,7 +365,7 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
         query: String,
         context: ChannelHandlerContext)
     {
-        precondition(self.currentQuery == nil, "Expected to not have an open query at this point")
+        precondition(self.rowStream == nil, "Expected to not have an open query at this point")
         let parse = PSQLFrontendMessage.Parse(
             preparedStatementName: statementName,
             query: query,
@@ -397,7 +397,7 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
         query: String, binds: [PSQLEncodable],
         context: ChannelHandlerContext)
     {
-        precondition(self.currentQuery == nil, "Expected to not have an open query at this point")
+        precondition(self.rowStream == nil, "Expected to not have an open query at this point")
         let unnamedStatementName = ""
         let parse = PSQLFrontendMessage.Parse(
             preparedStatementName: unnamedStatementName,
@@ -408,11 +408,11 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
             preparedStatementName: unnamedStatementName,
             parameters: binds)
         
-        context.write(.parse(parse), promise: nil)
-        context.write(.describe(.preparedStatement("")), promise: nil)
-        context.write(.bind(bind), promise: nil)
-        context.write(.execute(.init(portalName: "")), promise: nil)
-        context.write(.sync, promise: nil)
+        context.write(wrapOutboundOut(.parse(parse)), promise: nil)
+        context.write(wrapOutboundOut(.describe(.preparedStatement(""))), promise: nil)
+        context.write(wrapOutboundOut(.bind(bind)), promise: nil)
+        context.write(wrapOutboundOut(.execute(.init(portalName: ""))), promise: nil)
+        context.write(wrapOutboundOut(.sync), promise: nil)
         context.flush()
     }
     
@@ -421,29 +421,13 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
         columns: [PSQLBackendMessage.RowDescription.Column],
         context: ChannelHandlerContext)
     {
-        let eventLoop = context.channel.eventLoop
-        func consumeNextRow() -> EventLoopFuture<StateMachineStreamNextResult> {
-            let promise = eventLoop.makePromise(of: StateMachineStreamNextResult.self)
-            let action = self.state.consumeNextQueryRow(promise: promise)
-            self.run(action, with: context)
-            return promise.futureResult
-        }
-        let rows = PSQLRows(
+        let rows = PSQLRowBatchStream(
             rowDescription: columns,
             queryContext: queryContext,
             eventLoop: context.channel.eventLoop,
-            cancel: {
-                let action = self.state.cancelQueryStream()
-                self.run(action, with: context)
-            }, next: {
-                guard eventLoop.inEventLoop else {
-                    return eventLoop.flatSubmit { consumeNextRow() }
-                }
-                
-                return consumeNextRow()
-            })
+            rowSource: .stream(self))
         
-        self.currentQuery = rows
+        self.rowStream = rows
         queryContext.promise.succeed(rows)
     }
     
@@ -452,17 +436,11 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
         commandTag: String,
         context: ChannelHandlerContext)
     {
-        let eventLoop = context.channel.eventLoop
-        let rows = PSQLRows(
+        let rows = PSQLRowBatchStream(
             rowDescription: [],
             queryContext: queryContext,
             eventLoop: context.channel.eventLoop,
-            cancel: {
-                // ignore...
-            }, next: {
-                let emptyBuffer = CircularBuffer<[PSQLData]>(initialCapacity: 0)
-                return eventLoop.makeSucceededFuture(.complete(emptyBuffer, commandTag: commandTag))
-            })
+            rowSource: .noRows(.success(commandTag)))
         queryContext.promise.succeed(rows)
     }
     
@@ -489,6 +467,19 @@ final class PSQLChannelHandler: ChannelDuplexHandler {
             context.fireChannelInactive()
         }
     }
+}
+
+extension PSQLChannelHandler: PSQLRowsDataSource {
+    
+    func request() {
+        let action = self.state.requestQueryRows()
+        self.run(action, with: self.handlerContext!)
+    }
+    
+    func cancel() {
+        // we ignore this right now :)
+    }
+    
 }
 
 extension ChannelHandlerContext {

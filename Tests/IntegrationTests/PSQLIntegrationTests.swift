@@ -52,9 +52,9 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("SELECT version()", logger: .psqlTest).wait())
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         var version: String?
         XCTAssertNoThrow(version = try row?.decode(column: 0, as: String.self))
@@ -71,7 +71,7 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("SELECT generate_series(1, 10000);", logger: .psqlTest).wait())
         
         var expected: Int64 = 1
@@ -107,9 +107,9 @@ final class IntegrationTests: XCTestCase {
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
         for _ in 0..<1_000 {
-            var rows: PSQLRows?
+            var rows: PSQLRowBatchStream?
             XCTAssertNoThrow(rows = try conn?.query("SELECT version()", logger: .psqlTest).wait())
-            var row: PSQLRows.Row?
+            var row: PSQLRow?
             XCTAssertNoThrow(row = try rows?.next().wait())
             var version: String?
             XCTAssertNoThrow(version = try row?.decode(column: 0, as: String.self))
@@ -127,9 +127,9 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("SELECT $1::TEXT as foo", ["hello"], logger: .psqlTest).wait())
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         var foo: String?
         XCTAssertNoThrow(foo = try row?.decode(column: 0, as: String.self))
@@ -146,7 +146,7 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("""
         SELECT
             1::SMALLINT                   as smallint,
@@ -160,7 +160,7 @@ final class IntegrationTests: XCTestCase {
             9223372036854775807::BIGINT   as bigint_max
         """, logger: .psqlTest).wait())
         
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         
         XCTAssertEqual(try row?.decode(column: "smallint", as: Int16.self), 1)
@@ -185,11 +185,11 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         let array: [Int64] = [1, 2, 3]
         XCTAssertNoThrow(rows = try conn?.query("SELECT $1::int8[] as array", [array], logger: .psqlTest).wait())
         
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         
         XCTAssertEqual(try row?.decode(column: "array", as: [Int64].self), array)
@@ -205,10 +205,10 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("SELECT '{}'::int[] as array", logger: .psqlTest).wait())
         
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         
         XCTAssertEqual(try row?.decode(column: "array", as: [Int64].self), [])
@@ -224,11 +224,11 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         let doubles: [Double] = [3.14, 42]
         XCTAssertNoThrow(rows = try conn?.query("SELECT $1::double precision[] as doubles", [doubles], logger: .psqlTest).wait())
         
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         
         XCTAssertEqual(try row?.decode(column: "doubles", as: [Double].self), doubles)
@@ -244,7 +244,7 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
-        var rows: PSQLRows?
+        var rows: PSQLRowBatchStream?
         XCTAssertNoThrow(rows = try conn?.query("""
             SELECT
                 '2016-01-18 01:02:03 +0042'::DATE         as date,
@@ -252,7 +252,7 @@ final class IntegrationTests: XCTestCase {
                 '2016-01-18 01:02:03 +0042'::TIMESTAMPTZ  as timestamptz
             """, logger: .psqlTest).wait())
         
-        var row: PSQLRows.Row?
+        var row: PSQLRow?
         XCTAssertNoThrow(row = try rows?.next().wait())
         
         XCTAssertEqual(try row?.decode(column: "date", as: Date.self).description, "2016-01-18 00:00:00 +0000")
@@ -277,12 +277,12 @@ final class IntegrationTests: XCTestCase {
         defer { XCTAssertNoThrow(try conn?.close().wait()) }
         
         do {
-            var rows: PSQLRows?
+            var rows: PSQLRowBatchStream?
             XCTAssertNoThrow(rows = try conn?.query("""
                 select $1::jsonb as jsonb
                 """, [Object(foo: 1, bar: 2)], logger: .psqlTest).wait())
             
-            var row: PSQLRows.Row?
+            var row: PSQLRow?
             XCTAssertNoThrow(row = try rows?.next().wait())
             var result: Object?
             XCTAssertNoThrow(result = try row?.decode(column: "jsonb", as: Object.self))
@@ -293,12 +293,12 @@ final class IntegrationTests: XCTestCase {
         }
         
         do {
-            var rows: PSQLRows?
+            var rows: PSQLRowBatchStream?
             XCTAssertNoThrow(rows = try conn?.query("""
                 select $1::json as json
                 """, [Object(foo: 1, bar: 2)], logger: .psqlTest).wait())
             
-            var row: PSQLRows.Row?
+            var row: PSQLRow?
             XCTAssertNoThrow(row = try rows?.next().wait())
             var result: Object?
             XCTAssertNoThrow(result = try row?.decode(column: "json", as: Object.self))

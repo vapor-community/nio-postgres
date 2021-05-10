@@ -3,8 +3,7 @@ import Logging
 
 extension PostgresDatabase {
     public func simpleQuery(_ string: String) -> EventLoopFuture<[PostgresRow]> {
-        var rows: [PostgresRow] = []
-        return simpleQuery(string) { rows.append($0) }.map { rows }
+        return self.query(string, []).map { $0.rows }
     }
     
     public func simpleQuery(_ string: String, _ onRow: @escaping (PostgresRow) throws -> ()) -> EventLoopFuture<Void> {
