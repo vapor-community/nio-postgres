@@ -1,8 +1,12 @@
-/// The format code being used for the field.
-/// Currently will be zero (text) or one (binary).
-/// In a RowDescription returned from the statement variant of Describe,
-/// the format code is not yet known and will always be zero.
-enum PSQLFormatCode: Int16 {
+/// The format the postgres types are encoded in on the wire.
+///
+/// Currently there a two wire formats supported:
+///  - text
+///  - binary
+///
+/// In a `RowDescription` returned from the statement variant of `Describe`,
+/// the format is not yet known and will always be `.text`.
+enum PSQLFormat: Int16 {
     case text = 0
     case binary = 1
 }
@@ -11,11 +15,13 @@ struct PSQLData: Equatable {
     
     @usableFromInline var bytes: ByteBuffer?
     @usableFromInline var dataType: PSQLDataType
+    @usableFromInline var format: PSQLFormat
     
     /// use this only for testing
-    init(bytes: ByteBuffer?, dataType: PSQLDataType) {
+    init(bytes: ByteBuffer?, dataType: PSQLDataType, format: PSQLFormat) {
         self.bytes = bytes
         self.dataType = dataType
+        self.format = format
     }
     
     @inlinable
@@ -29,7 +35,7 @@ struct PSQLData: Equatable {
         case .none:
             throw PSQLCastingError.missingData(targetType: type, type: self.dataType, context: context)
         case .some(var buffer):
-            return try T.decode(from: &buffer, type: self.dataType, context: context)
+            return try T.decode(from: &buffer, type: self.dataType, format: self.format, context: context)
         }
     }
     
@@ -39,7 +45,7 @@ struct PSQLData: Equatable {
         case .none:
             return nil
         case .some(var buffer):
-            return try T.decode(from: &buffer, type: self.dataType, context: context)
+            return try T.decode(from: &buffer, type: self.dataType, format: self.format, context: context)
         }
     }
 }

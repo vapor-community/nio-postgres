@@ -3,6 +3,9 @@ protocol PSQLEncodable {
     /// identifies the data type that we will encode into `byteBuffer` in `encode`
     var psqlType: PSQLDataType { get }
     
+    /// identifies the postgres format that is used to encode the value into `byteBuffer` in `encode`
+    var psqlFormat: PSQLFormat { get }
+    
     /// Encode the entity into the `byteBuffer` in Postgres binary format, without setting
     /// the byte count. This method is called from the default `encodeRaw` implementation.
     func encode(into byteBuffer: inout ByteBuffer, context: PSQLEncodingContext) throws
@@ -17,7 +20,7 @@ protocol PSQLEncodable {
 protocol PSQLDecodable {
 
     /// decode an entity from the `byteBuffer` in postgres binary format
-    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> Self
+    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Self
 }
 
 /// A type that can be encoded into and decoded from a postgres binary format

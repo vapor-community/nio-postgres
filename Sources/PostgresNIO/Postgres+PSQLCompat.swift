@@ -30,6 +30,10 @@ extension PostgresData: PSQLEncodable {
         PSQLDataType(Int32(self.type.rawValue))
     }
     
+    var psqlFormat: PSQLFormat {
+        .binary
+    }
+    
     func encode(into byteBuffer: inout ByteBuffer, context: PSQLEncodingContext) throws {
         preconditionFailure("Should never be hit, since `encodeRaw` is implemented.")
     }
@@ -47,7 +51,7 @@ extension PostgresData: PSQLEncodable {
 }
 
 extension PostgresData: PSQLDecodable {
-    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> PostgresData {
+    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> PostgresData {
         let myBuffer = byteBuffer.readSlice(length: byteBuffer.readableBytes)!
         
         return PostgresData(type: PostgresDataType(UInt32(type.rawValue)), typeModifier: nil, formatCode: .binary, value: myBuffer)
@@ -97,7 +101,7 @@ extension PSQLError {
 }
 
 extension PostgresFormatCode {
-    init(psqlFormatCode: PSQLFormatCode) {
+    init(psqlFormatCode: PSQLFormat) {
         switch psqlFormatCode {
         case .binary:
             self = .binary

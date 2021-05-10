@@ -7,8 +7,8 @@ class RowDescriptionTests: XCTestCase {
     
     func testDecode() {
         let columns: [PSQLBackendMessage.RowDescription.Column] = [
-            .init(name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, formatCode: .binary),
-            .init(name: "Second", tableOID: 123, columnAttributeNumber: 456, dataType: .uuidArray, dataTypeSize: 567, dataTypeModifier: 123, formatCode: .text),
+            .init(name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, format: .binary),
+            .init(name: "Second", tableOID: 123, columnAttributeNumber: 456, dataType: .uuidArray, dataTypeSize: 567, dataTypeModifier: 123, format: .text),
         ]
         
         let expected: [PSQLBackendMessage] = [
@@ -31,7 +31,7 @@ class RowDescriptionTests: XCTestCase {
                     buffer.writeInteger(column.dataType.rawValue)
                     buffer.writeInteger(column.dataTypeSize)
                     buffer.writeInteger(column.dataTypeModifier)
-                    buffer.writeInteger(column.formatCode.rawValue)
+                    buffer.writeInteger(column.format.rawValue)
                 }
             }
         }
@@ -43,7 +43,7 @@ class RowDescriptionTests: XCTestCase {
     
     func testDecodeFailureBecauseOfMissingNullTerminationInColumnName() {
         let column = PSQLBackendMessage.RowDescription.Column(
-            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, formatCode: .binary)
+            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, format: .binary)
         
         var buffer = ByteBuffer()
         buffer.writeBackendMessage(id: .rowDescription) { buffer in
@@ -54,7 +54,7 @@ class RowDescriptionTests: XCTestCase {
             buffer.writeInteger(column.dataType.rawValue)
             buffer.writeInteger(column.dataTypeSize)
             buffer.writeInteger(column.dataTypeModifier)
-            buffer.writeInteger(column.formatCode.rawValue)
+            buffer.writeInteger(column.format.rawValue)
         }
         
         XCTAssertThrowsError(try ByteToMessageDecoderVerifier.verifyDecoder(
@@ -66,7 +66,7 @@ class RowDescriptionTests: XCTestCase {
     
     func testDecodeFailureBecauseOfMissingColumnCount() {
         let column = PSQLBackendMessage.RowDescription.Column(
-            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, formatCode: .binary)
+            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, format: .binary)
         
         var buffer = ByteBuffer()
         buffer.writeBackendMessage(id: .rowDescription) { buffer in
@@ -76,7 +76,7 @@ class RowDescriptionTests: XCTestCase {
             buffer.writeInteger(column.dataType.rawValue)
             buffer.writeInteger(column.dataTypeSize)
             buffer.writeInteger(column.dataTypeModifier)
-            buffer.writeInteger(column.formatCode.rawValue)
+            buffer.writeInteger(column.format.rawValue)
         }
         
         XCTAssertThrowsError(try ByteToMessageDecoderVerifier.verifyDecoder(
@@ -88,7 +88,7 @@ class RowDescriptionTests: XCTestCase {
     
     func testDecodeFailureBecauseInvalidFormatCode() {
         let column = PSQLBackendMessage.RowDescription.Column(
-            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, formatCode: .binary)
+            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, format: .binary)
         
         var buffer = ByteBuffer()
         buffer.writeBackendMessage(id: .rowDescription) { buffer in
@@ -111,7 +111,7 @@ class RowDescriptionTests: XCTestCase {
     
     func testDecodeFailureBecauseNegativeColumnCount() {
         let column = PSQLBackendMessage.RowDescription.Column(
-            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, formatCode: .binary)
+            name: "First", tableOID: 123, columnAttributeNumber: 123, dataType: .bool, dataTypeSize: 2, dataTypeModifier: 8, format: .binary)
         
         var buffer = ByteBuffer()
         buffer.writeBackendMessage(id: .rowDescription) { buffer in
@@ -122,7 +122,7 @@ class RowDescriptionTests: XCTestCase {
             buffer.writeInteger(column.dataType.rawValue)
             buffer.writeInteger(column.dataTypeSize)
             buffer.writeInteger(column.dataTypeModifier)
-            buffer.writeInteger(column.formatCode.rawValue)
+            buffer.writeInteger(column.format.rawValue)
         }
         
         XCTAssertThrowsError(try ByteToMessageDecoderVerifier.verifyDecoder(

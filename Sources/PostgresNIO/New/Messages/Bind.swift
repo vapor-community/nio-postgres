@@ -18,10 +18,12 @@ extension PSQLFrontendMessage {
             // zero to indicate that there are no parameters or that the parameters all use the
             // default format (text); or one, in which case the specified format code is applied
             // to all parameters; or it can equal the actual number of parameters.
-            buffer.writeInteger(1, as: Int16.self)
+            buffer.writeInteger(Int16(self.parameters.count))
             
             // The parameter format codes. Each must presently be zero (text) or one (binary).
-            buffer.writeInteger(1, as: Int16.self)
+            self.parameters.forEach {
+                buffer.writeInteger($0.psqlFormat.rawValue)
+            }
             
             buffer.writeInteger(Int16(self.parameters.count))
             
@@ -38,7 +40,7 @@ extension PSQLFrontendMessage {
             // result columns of the query.
             buffer.writeInteger(1, as: Int16.self)
             // The result-column format codes. Each must presently be zero (text) or one (binary).
-            buffer.writeInteger(1, as: Int16.self)
+            buffer.writeInteger(PSQLFormat.binary.rawValue, as: Int16.self)
         }
     }
 }

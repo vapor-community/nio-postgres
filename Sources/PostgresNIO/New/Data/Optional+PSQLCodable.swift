@@ -1,5 +1,5 @@
 extension Optional: PSQLDecodable where Wrapped: PSQLDecodable {
-    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> Optional<Wrapped> {
+    static func decode(from byteBuffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Optional<Wrapped> {
         preconditionFailure("This code path should never be hit.")
         // The code path for decoding an optional should be:
         //  -> PSQLData.decode(as: String?.self)
@@ -15,6 +15,15 @@ extension Optional: PSQLEncodable where Wrapped: PSQLEncodable {
             return value.psqlType
         case .none:
             return .null
+        }
+    }
+    
+    var psqlFormat: PSQLFormat {
+        switch self {
+        case .some(let value):
+            return value.psqlFormat
+        case .none:
+            return .binary
         }
     }
     

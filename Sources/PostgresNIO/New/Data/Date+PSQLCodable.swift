@@ -5,7 +5,11 @@ extension Date: PSQLCodable {
         .timestamptz
     }
     
-    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> Self {
+    var psqlFormat: PSQLFormat {
+        .binary
+    }
+    
+    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Self {
         switch type {
         case .timestamp, .timestamptz:
             guard buffer.readableBytes == 8, let microseconds = buffer.readInteger(as: Int64.self) else {

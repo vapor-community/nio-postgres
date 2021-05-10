@@ -114,7 +114,20 @@ struct ExtendedQueryStateMachine {
         }
         
         return self.avoidingStateMachineCoW { state -> Action in
-            state = .rowDescriptionReceived(queryContext, rowDescription.columns)
+            // In Postgres extended queries we receive the `rowDescription` before we send the
+            // `Bind` message. Well actually it's vica versa, but this is only true since we do
+            // pipelining during a query.
+            //
+            // In the actual protocol description we receive a rowDescription before the Bind
+            
+            // In Postgres extended queries we always request the response rows to be returned in
+            // `.binary` format.
+            let columns = rowDescription.columns.map { column -> PSQLBackendMessage.RowDescription.Column in                
+                var column = column
+                column.format = .binary
+                return column
+            }
+            state = .rowDescriptionReceived(queryContext, columns)
             return .wait
         }
     }
@@ -157,7 +170,7 @@ struct ExtendedQueryStateMachine {
             
             return self.avoidingStateMachineCoW { state -> Action in
                 let row = dataRow.columns.enumerated().map { (index, buffer) in
-                    PSQLData(bytes: buffer, dataType: columns[index].dataType)
+                    PSQLData(bytes: buffer, dataType: columns[index].dataType, format: columns[index].format)
                 }
                 buffer.append(row)
                 state = .bufferingRows(columns, buffer, readOnEmpty: readOnEmpty)
@@ -174,7 +187,7 @@ struct ExtendedQueryStateMachine {
             return self.avoidingStateMachineCoW { state -> Action in
                 precondition(buffer.isEmpty, "Expected the buffer to be empty")
                 let row = dataRow.columns.enumerated().map { (index, buffer) in
-                    PSQLData(bytes: buffer, dataType: columns[index].dataType)
+                    PSQLData(bytes: buffer, dataType: columns[index].dataType, format: columns[index].format)
                 }
                 
                 state = .bufferingRows(columns, buffer, readOnEmpty: false)
