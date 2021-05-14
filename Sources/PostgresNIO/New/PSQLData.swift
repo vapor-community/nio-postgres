@@ -3,9 +3,6 @@
 /// Currently there a two wire formats supported:
 ///  - text
 ///  - binary
-///
-/// In a `RowDescription` returned from the statement variant of `Describe`,
-/// the format is not yet known and will always be `.text`.
 enum PSQLFormat: Int16 {
     case text = 0
     case binary = 1

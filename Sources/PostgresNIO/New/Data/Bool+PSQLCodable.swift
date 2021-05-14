@@ -27,7 +27,7 @@ extension Bool: PSQLCodable {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
         case .text:
-            guard buffer.readableBytes >= 1 else {
+            guard buffer.readableBytes == 1 else {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
             

@@ -14,7 +14,6 @@ extension PSQLCodable where Self: Codable {
     }
     
     static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Self {
-        print(buffer.getString(at: 0, length: buffer.readableBytes)!)
         switch (format, type) {
         case (.binary, .jsonb):
             guard JSONBVersionByte == buffer.readInteger(as: UInt8.self) else {
