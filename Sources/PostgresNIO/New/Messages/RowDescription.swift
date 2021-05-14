@@ -23,7 +23,7 @@ extension PSQLBackendMessage {
             /// The type modifier (see pg_attribute.atttypmod). The meaning of the modifier is type-specific.
             var dataTypeModifier: Int32
             
-            /// The format being used for the field. Currently will text or binary. In a RowDescription returned
+            /// The format being used for the field. Currently will be text or binary. In a RowDescription returned
             /// from the statement variant of Describe, the format code is not yet known and will always be text.
             var format: PSQLFormat
         }

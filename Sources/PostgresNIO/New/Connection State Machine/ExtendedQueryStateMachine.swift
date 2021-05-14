@@ -115,7 +115,7 @@ struct ExtendedQueryStateMachine {
         
         return self.avoidingStateMachineCoW { state -> Action in
             // In Postgres extended queries we receive the `rowDescription` before we send the
-            // `Bind` message. Well actually it's vica versa, but this is only true since we do
+            // `Bind` message. Well actually it's vice versa, but this is only true since we do
             // pipelining during a query.
             //
             // In the actual protocol description we receive a rowDescription before the Bind
