@@ -25,7 +25,7 @@ class String_PSQLCodableTests: XCTestCase {
         for dataType in dataTypes {
             var loopBuffer = buffer
             var result: String?
-            XCTAssertNoThrow(result = try String.decode(from: &loopBuffer, type: dataType, context: .forTests()))
+            XCTAssertNoThrow(result = try String.decode(from: &loopBuffer, type: dataType, format: .binary, context: .forTests()))
             XCTAssertEqual(result, expected)
         }
     }
@@ -36,7 +36,7 @@ class String_PSQLCodableTests: XCTestCase {
         
         for dataType in dataTypes {
             var loopBuffer = buffer
-            XCTAssertThrowsError(try String.decode(from: &loopBuffer, type: dataType, context: .forTests())) { error in
+            XCTAssertThrowsError(try String.decode(from: &loopBuffer, type: dataType, format: .binary, context: .forTests())) { error in
                 XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
                 XCTAssertEqual((error as? PSQLCastingError)?.file, #file)
                 
@@ -50,7 +50,7 @@ class String_PSQLCodableTests: XCTestCase {
         let dataTypes: [PSQLDataType] = [.text, .varchar, .name]
         
         for dataType in dataTypes {
-            let data = PSQLData(bytes: nil, dataType: dataType)
+            let data = PSQLData(bytes: nil, dataType: dataType, format: .binary)
             XCTAssertThrowsError(try data.decode(as: String.self, context: .forTests())) { error in
                 XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
                 XCTAssertEqual((error as? PSQLCastingError)?.file, #file)
@@ -67,7 +67,7 @@ class String_PSQLCodableTests: XCTestCase {
         uuid.encode(into: &buffer, context: .forTests())
         
         var decoded: String?
-        XCTAssertNoThrow(decoded = try String.decode(from: &buffer, type: .uuid, context: .forTests()))
+        XCTAssertNoThrow(decoded = try String.decode(from: &buffer, type: .uuid, format: .binary, context: .forTests()))
         XCTAssertEqual(decoded, uuid.uuidString)
     }
     
@@ -78,7 +78,7 @@ class String_PSQLCodableTests: XCTestCase {
         // this makes only 15 bytes readable. this should lead to an error
         buffer.moveReaderIndex(forwardBy: 1)
         
-        XCTAssertThrowsError(try String.decode(from: &buffer, type: .uuid, context: .forTests())) { error in
+        XCTAssertThrowsError(try String.decode(from: &buffer, type: .uuid, format: .binary, context: .forTests())) { error in
             XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
             XCTAssertEqual((error as? PSQLCastingError)?.file, #file)
             

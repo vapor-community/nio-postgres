@@ -11,7 +11,7 @@ class Float_PSQLCodableTests: XCTestCase {
             value.encode(into: &buffer, context: .forTests())
             XCTAssertEqual(value.psqlType, .float8)
             XCTAssertEqual(buffer.readableBytes, 8)
-            let data = PSQLData(bytes: buffer, dataType: .float8)
+            let data = PSQLData(bytes: buffer, dataType: .float8, format: .binary)
             
             var result: Double?
             XCTAssertNoThrow(result = try data.decode(as: Double.self, context: .forTests()))
@@ -27,7 +27,7 @@ class Float_PSQLCodableTests: XCTestCase {
             value.encode(into: &buffer, context: .forTests())
             XCTAssertEqual(value.psqlType, .float4)
             XCTAssertEqual(buffer.readableBytes, 4)
-            let data = PSQLData(bytes: buffer, dataType: .float4)
+            let data = PSQLData(bytes: buffer, dataType: .float4, format: .binary)
             
             var result: Float?
             XCTAssertNoThrow(result = try data.decode(as: Float.self, context: .forTests()))
@@ -42,7 +42,7 @@ class Float_PSQLCodableTests: XCTestCase {
         value.encode(into: &buffer, context: .forTests())
         XCTAssertEqual(value.psqlType, .float8)
         XCTAssertEqual(buffer.readableBytes, 8)
-        let data = PSQLData(bytes: buffer, dataType: .float8)
+        let data = PSQLData(bytes: buffer, dataType: .float8, format: .binary)
         
         var result: Double?
         XCTAssertNoThrow(result = try data.decode(as: Double.self, context: .forTests()))
@@ -56,7 +56,7 @@ class Float_PSQLCodableTests: XCTestCase {
         value.encode(into: &buffer, context: .forTests())
         XCTAssertEqual(value.psqlType, .float8)
         XCTAssertEqual(buffer.readableBytes, 8)
-        let data = PSQLData(bytes: buffer, dataType: .float8)
+        let data = PSQLData(bytes: buffer, dataType: .float8, format: .binary)
         
         var result: Double?
         XCTAssertNoThrow(result = try data.decode(as: Double.self, context: .forTests()))
@@ -71,7 +71,7 @@ class Float_PSQLCodableTests: XCTestCase {
             value.encode(into: &buffer, context: .forTests())
             XCTAssertEqual(value.psqlType, .float4)
             XCTAssertEqual(buffer.readableBytes, 4)
-            let data = PSQLData(bytes: buffer, dataType: .float4)
+            let data = PSQLData(bytes: buffer, dataType: .float4, format: .binary)
             
             var result: Double?
             XCTAssertNoThrow(result = try data.decode(as: Double.self, context: .forTests()))
@@ -87,7 +87,7 @@ class Float_PSQLCodableTests: XCTestCase {
             value.encode(into: &buffer, context: .forTests())
             XCTAssertEqual(value.psqlType, .float8)
             XCTAssertEqual(buffer.readableBytes, 8)
-            let data = PSQLData(bytes: buffer, dataType: .float8)
+            let data = PSQLData(bytes: buffer, dataType: .float8, format: .binary)
             
             var result: Float?
             XCTAssertNoThrow(result = try data.decode(as: Float.self, context: .forTests()))
@@ -100,8 +100,8 @@ class Float_PSQLCodableTests: XCTestCase {
         eightByteBuffer.writeInteger(Int64(0))
         var fourByteBuffer = ByteBuffer()
         fourByteBuffer.writeInteger(Int32(0))
-        let toLongData = PSQLData(bytes: eightByteBuffer, dataType: .float4)
-        let toShortData = PSQLData(bytes: fourByteBuffer, dataType: .float8)
+        let toLongData = PSQLData(bytes: eightByteBuffer, dataType: .float4, format: .binary)
+        let toShortData = PSQLData(bytes: fourByteBuffer, dataType: .float8, format: .binary)
         
         XCTAssertThrowsError(try toLongData.decode(as: Double.self, context: .forTests())) { error in
             XCTAssert(error is PSQLCastingError)
@@ -123,7 +123,7 @@ class Float_PSQLCodableTests: XCTestCase {
     func testDecodeFailureInvalidType() {
         var buffer = ByteBuffer()
         buffer.writeInteger(Int64(0))
-        let data = PSQLData(bytes: buffer, dataType: .int8)
+        let data = PSQLData(bytes: buffer, dataType: .int8, format: .binary)
         
         XCTAssertThrowsError(try data.decode(as: Double.self, context: .forTests())) { error in
             XCTAssert(error is PSQLCastingError)

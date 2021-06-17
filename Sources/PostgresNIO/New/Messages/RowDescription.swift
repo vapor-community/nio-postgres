@@ -23,9 +23,9 @@ extension PSQLBackendMessage {
             /// The type modifier (see pg_attribute.atttypmod). The meaning of the modifier is type-specific.
             var dataTypeModifier: Int32
             
-            /// The format code being used for the field. Currently will be zero (text) or one (binary). In a RowDescription returned
-            /// from the statement variant of Describe, the format code is not yet known and will always be zero.
-            var formatCode: PSQLFormatCode
+            /// The format being used for the field. Currently will be text or binary. In a RowDescription returned
+            /// from the statement variant of Describe, the format code is not yet known and will always be text.
+            var format: PSQLFormat
         }
         
         static func decode(from buffer: inout ByteBuffer) throws -> Self {
@@ -53,8 +53,8 @@ extension PSQLBackendMessage {
                 let dataTypeModifier = buffer.readInteger(as: Int32.self)!
                 let formatCodeInt16 = buffer.readInteger(as: Int16.self)!
                 
-                guard let formatCode = PSQLFormatCode(rawValue: formatCodeInt16) else {
-                    throw PartialDecodingError.valueNotRawRepresentable(value: formatCodeInt16, asType: PSQLFormatCode.self)
+                guard let format = PSQLFormat(rawValue: formatCodeInt16) else {
+                    throw PartialDecodingError.valueNotRawRepresentable(value: formatCodeInt16, asType: PSQLFormat.self)
                 }
                 
                 let field = Column(
@@ -64,7 +64,7 @@ extension PSQLBackendMessage {
                     dataType: dataType,
                     dataTypeSize: dataTypeSize,
                     dataTypeModifier: dataTypeModifier,
-                    formatCode: formatCode)
+                    format: format)
                 
                 result.append(field)
             }

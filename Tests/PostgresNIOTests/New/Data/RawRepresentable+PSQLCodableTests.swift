@@ -17,7 +17,7 @@ class RawRepresentable_PSQLCodableTests: XCTestCase {
             XCTAssertNoThrow(try value.encode(into: &buffer, context: .forTests()))
             XCTAssertEqual(value.psqlType, Int16.psqlArrayElementType)
             XCTAssertEqual(buffer.readableBytes, 2)
-            let data = PSQLData(bytes: buffer, dataType: Int16.psqlArrayElementType)
+            let data = PSQLData(bytes: buffer, dataType: Int16.psqlArrayElementType, format: .binary)
             
             var result: MyRawRepresentable?
             XCTAssertNoThrow(result = try data.decode(as: MyRawRepresentable.self, context: .forTests()))
@@ -28,7 +28,7 @@ class RawRepresentable_PSQLCodableTests: XCTestCase {
     func testDecodeInvalidRawTypeValue() {
         var buffer = ByteBuffer()
         buffer.writeInteger(Int16(4)) // out of bounds
-        let data = PSQLData(bytes: buffer, dataType: Int16.psqlArrayElementType)
+        let data = PSQLData(bytes: buffer, dataType: Int16.psqlArrayElementType, format: .binary)
         
         XCTAssertThrowsError(try data.decode(as: MyRawRepresentable.self, context: .forTests())) { error in
             XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
@@ -40,7 +40,7 @@ class RawRepresentable_PSQLCodableTests: XCTestCase {
     func testDecodeInvalidUnderlyingTypeValue() {
         var buffer = ByteBuffer()
         buffer.writeInteger(Int32(1)) // out of bounds
-        let data = PSQLData(bytes: buffer, dataType: Int32.psqlArrayElementType)
+        let data = PSQLData(bytes: buffer, dataType: Int32.psqlArrayElementType, format: .binary)
         
         XCTAssertThrowsError(try data.decode(as: MyRawRepresentable.self, context: .forTests())) { error in
             XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)

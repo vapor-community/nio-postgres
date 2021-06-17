@@ -7,6 +7,10 @@ extension UUID: PSQLCodable {
         .uuid
     }
     
+    var psqlFormat: PSQLFormat {
+        .binary
+    }
+    
     func encode(into byteBuffer: inout ByteBuffer, context: PSQLEncodingContext) {
         let uuid = self.uuid
         byteBuffer.writeBytes([
@@ -17,15 +21,23 @@ extension UUID: PSQLCodable {
         ])
     }
     
-    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> UUID {
-        switch type {
-        case .uuid:
+    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> UUID {
+        switch (format, type) {
+        case (.binary, .uuid):
             guard let uuid = buffer.readUUID() else {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
             return uuid
-        case .varchar, .text:
-            guard let uuid = buffer.readString(length: buffer.readableBytes).flatMap({ UUID(uuidString: $0) }) else {
+        case (.binary, .varchar),
+             (.binary, .text),
+             (.text, .uuid),
+             (.text, .text),
+             (.text, .varchar):
+            guard buffer.readableBytes == 36 else {
+                throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
+            }
+            
+            guard let uuid = buffer.readString(length: 36).flatMap({ UUID(uuidString: $0) }) else {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
             return uuid

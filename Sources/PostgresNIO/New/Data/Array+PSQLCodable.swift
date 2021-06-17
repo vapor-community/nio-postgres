@@ -72,6 +72,10 @@ extension Array: PSQLEncodable where Element: PSQLArrayElement {
         Element.psqlArrayType
     }
     
+    var psqlFormat: PSQLFormat {
+        .binary
+    }
+    
     func encode(into buffer: inout ByteBuffer, context: PSQLEncodingContext) throws {
         // 0 if empty, 1 if not
         buffer.writeInteger(self.isEmpty ? 0 : 1, as: UInt32.self)
@@ -98,7 +102,12 @@ extension Array: PSQLEncodable where Element: PSQLArrayElement {
 
 extension Array: PSQLDecodable where Element: PSQLArrayElement {
     
-    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> Array<Element> {
+    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Array<Element> {
+        guard case .binary = format else {
+            // currently we only support decoding arrays in binary format.
+            throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
+        }
+        
         guard let isNotEmpty = buffer.readInteger(as: Int32.self), (0...1).contains(isNotEmpty) else {
             throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
         }
@@ -135,7 +144,7 @@ extension Array: PSQLDecodable where Element: PSQLArrayElement {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
             
-            let element = try Element.decode(from: &elementBuffer, type: elementType, context: context)
+            let element = try Element.decode(from: &elementBuffer, type: elementType, format: format, context: context)
             
             result.append(element)
         }

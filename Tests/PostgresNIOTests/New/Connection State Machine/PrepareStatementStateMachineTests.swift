@@ -20,7 +20,7 @@ class PrepareStatementStateMachineTests: XCTestCase {
         XCTAssertEqual(state.parameterDescriptionReceived(.init(dataTypes: [.int8])), .wait)
         
         let columns: [PSQLBackendMessage.RowDescription.Column] = [
-            .init(name: "id", tableOID: 0, columnAttributeNumber: 0, dataType: .int8, dataTypeSize: 8, dataTypeModifier: -1, formatCode: .binary)
+            .init(name: "id", tableOID: 0, columnAttributeNumber: 0, dataType: .int8, dataTypeSize: 8, dataTypeModifier: -1, format: .binary)
         ]
         
         XCTAssertEqual(state.rowDescriptionReceived(.init(columns: columns)),

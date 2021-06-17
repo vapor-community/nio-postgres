@@ -262,6 +262,28 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNil(try rows?.next().wait())
     }
     
+    func testDecodeUUID() {
+        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        defer { XCTAssertNoThrow(try eventLoopGroup.syncShutdownGracefully()) }
+        let eventLoop = eventLoopGroup.next()
+        
+        var conn: PSQLConnection?
+        XCTAssertNoThrow(conn = try PSQLConnection.test(on: eventLoop).wait())
+        defer { XCTAssertNoThrow(try conn?.close().wait()) }
+        
+        var rows: PSQLRows?
+        XCTAssertNoThrow(rows = try conn?.query("""
+            SELECT '2c68f645-9ca6-468b-b193-ee97f241c2f8'::UUID as uuid
+            """, logger: .psqlTest).wait())
+        
+        var row: PSQLRows.Row?
+        XCTAssertNoThrow(row = try rows?.next().wait())
+        
+        XCTAssertEqual(try row?.decode(column: "uuid", as: UUID.self), UUID(uuidString: "2c68f645-9ca6-468b-b193-ee97f241c2f8"))
+        
+        XCTAssertNil(try rows?.next().wait())
+    }
+    
     func testRoundTripJSONB() {
         struct Object: Codable, PSQLCodable {
             let foo: Int

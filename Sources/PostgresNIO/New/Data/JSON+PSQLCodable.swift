@@ -9,15 +9,18 @@ extension PSQLCodable where Self: Codable {
         .jsonb
     }
     
-    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, context: PSQLDecodingContext) throws -> Self {
-        switch type {
-        case .jsonb:
+    var psqlFormat: PSQLFormat {
+        .binary
+    }
+    
+    static func decode(from buffer: inout ByteBuffer, type: PSQLDataType, format: PSQLFormat, context: PSQLDecodingContext) throws -> Self {
+        switch (format, type) {
+        case (.binary, .jsonb):
             guard JSONBVersionByte == buffer.readInteger(as: UInt8.self) else {
                 throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)
             }
-            
             return try context.jsonDecoder.decode(Self.self, from: buffer)
-        case .json:
+        case (.binary, .json), (.text, .jsonb), (.text, .json):
             return try context.jsonDecoder.decode(Self.self, from: buffer)
         default:
             throw PSQLCastingError.failure(targetType: Self.self, type: type, postgresData: buffer, context: context)

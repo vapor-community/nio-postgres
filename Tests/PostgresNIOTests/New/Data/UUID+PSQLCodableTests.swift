@@ -11,6 +11,7 @@ class UUID_PSQLCodableTests: XCTestCase {
             uuid.encode(into: &buffer, context: .forTests())
             
             XCTAssertEqual(uuid.psqlType, .uuid)
+            XCTAssertEqual(uuid.psqlFormat, .binary)
             XCTAssertEqual(buffer.readableBytes, 16)
             var byteIterator = buffer.readableBytesView.makeIterator()
             
@@ -32,13 +33,19 @@ class UUID_PSQLCodableTests: XCTestCase {
             XCTAssertEqual(byteIterator.next(), uuid.uuid.15)
             
             var decoded: UUID?
-            XCTAssertNoThrow(decoded = try UUID.decode(from: &buffer, type: .uuid, context: .forTests()))
+            XCTAssertNoThrow(decoded = try UUID.decode(from: &buffer, type: .uuid, format: .binary, context: .forTests()))
             XCTAssertEqual(decoded, uuid)
         }
     }
     
     func testDecodeFromString() {
-        let dataTypes: [PSQLDataType] = [.varchar, .text]
+        let options: [(PSQLFormat, PSQLDataType)] = [
+            (.binary, .text),
+            (.binary, .varchar),
+            (.text, .uuid),
+            (.text, .text),
+            (.text, .varchar),
+        ]
         
         for _ in 0..<100 {
             // use uppercase
@@ -46,10 +53,10 @@ class UUID_PSQLCodableTests: XCTestCase {
             var lowercaseBuffer = ByteBuffer()
             lowercaseBuffer.writeString(uuid.uuidString.lowercased())
  
-            for dataType in dataTypes {
+            for (format, dataType) in options {
                 var loopBuffer = lowercaseBuffer
                 var decoded: UUID?
-                XCTAssertNoThrow(decoded = try UUID.decode(from: &loopBuffer, type: dataType, context: .forTests()))
+                XCTAssertNoThrow(decoded = try UUID.decode(from: &loopBuffer, type: dataType, format: format, context: .forTests()))
                 XCTAssertEqual(decoded, uuid)
             }
             
@@ -57,10 +64,10 @@ class UUID_PSQLCodableTests: XCTestCase {
             var uppercaseBuffer = ByteBuffer()
             uppercaseBuffer.writeString(uuid.uuidString)
             
-            for dataType in dataTypes {
+            for (format, dataType) in options {
                 var loopBuffer = uppercaseBuffer
                 var decoded: UUID?
-                XCTAssertNoThrow(decoded = try UUID.decode(from: &loopBuffer, type: dataType, context: .forTests()))
+                XCTAssertNoThrow(decoded = try UUID.decode(from: &loopBuffer, type: dataType, format: format, context: .forTests()))
                 XCTAssertEqual(decoded, uuid)
             }
         }
@@ -74,7 +81,7 @@ class UUID_PSQLCodableTests: XCTestCase {
         // this makes only 15 bytes readable. this should lead to an error
         buffer.moveReaderIndex(forwardBy: 1)
         
-        XCTAssertThrowsError(try UUID.decode(from: &buffer, type: .uuid, context: .forTests())) { error in
+        XCTAssertThrowsError(try UUID.decode(from: &buffer, type: .uuid, format: .binary, context: .forTests())) { error in
             XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
             XCTAssertEqual((error as? PSQLCastingError)?.file, #file)
             
@@ -94,7 +101,7 @@ class UUID_PSQLCodableTests: XCTestCase {
         
         for dataType in dataTypes {
             var loopBuffer = buffer
-            XCTAssertThrowsError(try UUID.decode(from: &loopBuffer, type: dataType, context: .forTests())) { error in
+            XCTAssertThrowsError(try UUID.decode(from: &loopBuffer, type: dataType, format: .binary, context: .forTests())) { error in
                 XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
                 XCTAssertEqual((error as? PSQLCastingError)?.file, #file)
                 
@@ -112,7 +119,7 @@ class UUID_PSQLCodableTests: XCTestCase {
         let dataTypes: [PSQLDataType] = [.bool, .int8, .int2, .int4Array]
         
         for dataType in dataTypes {
-            let data = PSQLData(bytes: buffer, dataType: dataType)
+            let data = PSQLData(bytes: buffer, dataType: dataType, format: .binary)
             
             XCTAssertThrowsError(try data.decode(as: UUID.self, context: .forTests())) { error in
                 XCTAssertEqual((error as? PSQLCastingError)?.line, #line - 1)
@@ -124,4 +131,3 @@ class UUID_PSQLCodableTests: XCTestCase {
         }
     }
 }
-
