@@ -15,6 +15,7 @@ enum PSQLFrontendMessage {
     case flush
     case parse(Parse)
     case password(Password)
+    case query(Query)
     case saslInitialResponse(SASLInitialResponse)
     case saslResponse(SASLResponse)
     case sslRequest(SSLRequest)
@@ -30,6 +31,7 @@ enum PSQLFrontendMessage {
         case flush
         case parse
         case password
+        case query
         case saslInitialResponse
         case saslResponse
         case sync
@@ -51,6 +53,8 @@ enum PSQLFrontendMessage {
                 return UInt8(ascii: "P")
             case .password:
                 return UInt8(ascii: "p")
+            case .query:
+                return UInt8(ascii: "Q")
             case .saslInitialResponse:
                 return UInt8(ascii: "p")
             case .saslResponse:
@@ -84,6 +88,8 @@ extension PSQLFrontendMessage {
             return .parse
         case .password:
             return .password
+        case .query:
+            return .query
         case .saslInitialResponse:
             return .saslInitialResponse
         case .saslResponse:
@@ -154,6 +160,9 @@ extension PSQLFrontendMessage {
             case .password(let password):
                 buffer.writeFrontendMessageID(message.id)
                 encode(password, into: &buffer)
+            case .query(let query):
+                buffer.writeFrontendMessageID(message.id)
+                encode(query, into: &buffer)
             case .saslInitialResponse(let saslInitialResponse):
                 buffer.writeFrontendMessageID(message.id)
                 encode(saslInitialResponse, into: &buffer)
