@@ -91,6 +91,8 @@ public struct PostgresDataType: Codable, Equatable, ExpressibleByIntegerLiteral,
     public static let timestampArray = PostgresDataType(1115)
     /// `1184`
     public static let timestamptz = PostgresDataType(1184)
+    /// `1185`
+    public static let timestamptzArray = PostgresDataType(1185)
     /// `1266`
     public static let timetz = PostgresDataType(1266)
     /// `1700`
@@ -169,6 +171,7 @@ public struct PostgresDataType: Codable, Equatable, ExpressibleByIntegerLiteral,
         case .timestamp: return "TIMESTAMP"
         case .timestamptz: return "TIMESTAMPTZ"
         case .timestampArray: return "TIMESTAMP[]"
+        case .timestamptzArray: return "TIMESTAMPTZ[]"
         case .numeric: return "NUMERIC"
         case .void: return "VOID"
         case .uuid: return "UUID"
@@ -196,6 +199,8 @@ public struct PostgresDataType: Codable, Equatable, ExpressibleByIntegerLiteral,
         case .jsonb: return .jsonbArray
         case .text: return .textArray
         case .varchar: return .varcharArray
+        case .timestamp: return .timestampArray
+        case .timestamptz: return .timestamptzArray
         default: return nil
         }
     }
@@ -218,6 +223,8 @@ public struct PostgresDataType: Codable, Equatable, ExpressibleByIntegerLiteral,
         case .jsonbArray: return .jsonb
         case .textArray: return .text
         case .varcharArray: return .varchar
+        case .timestampArray: return .timestamp
+        case .timestamptzArray: return .timestamptz
         default: return nil
         }
     }
